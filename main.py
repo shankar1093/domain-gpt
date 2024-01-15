@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Request, HTTPException, status
-from fastapi.security.api_key import Security, APIKeyHeader, APIKeyQuery
+from fastapi import FastAPI, Request, HTTPException, status, Security
+from fastapi.security.api_key import APIKeyHeader, APIKeyQuery
 from typing import Union
 import requests
 import os
@@ -22,6 +22,7 @@ cache = {}
 api_key_query = APIKeyQuery(name="api-key", auto_error=False)
 api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
+
 def get_api_key(
     api_key_query: str = Security(api_key_query),
     api_key_header: str = Security(api_key_header),
@@ -40,15 +41,26 @@ def get_api_key(
     """
 
     if api_key_query:
-        data, count = supabase.table("api_keys").select("api_key").eq("active", api_key_query).execute()
+        data, count = (
+            supabase.table("api_keys")
+            .select("api_key")
+            .eq("active", api_key_query)
+            .execute()
+        )
         return count
     elif api_key_header:
-        data, count = supabase.table("api_keys").select("api_key").eq("active", api_key_header).execute()
+        data, count = (
+            supabase.table("api_keys")
+            .select("api_key")
+            .eq("active", api_key_header)
+            .execute()
+        )
         return count
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or missing API Key",
     )
+
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -83,7 +95,9 @@ async def log_requests(request: Request, call_next):
 
 
 @app.get("/checkdomain/{domain_name}")
-async def check_domain_availability(domain_name: str, api_key: str = Security(get_api_key)):
+async def check_domain_availability(
+    domain_name: str, api_key: str = Security(get_api_key)
+):
     if domain_name in cache:
         return cache[domain_name]
 
