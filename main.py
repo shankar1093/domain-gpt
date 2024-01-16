@@ -24,7 +24,7 @@ api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 def verify_api_key(
     api_key_header: str = Security(api_key_header),
-) -> str:
+) -> bool:
     """Retrieve and validate an API key from the query parameters or HTTP header.
 
     Args:
