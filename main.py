@@ -17,14 +17,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 whoapi = "https://api.whoapi.com"
-api_key = os.environ.get("WHO_APIKEY")
+who_api_key = os.environ.get("WHO_APIKEY")
 cache = {}
-api_key_query = APIKeyQuery(name="api-key", auto_error=False)
-api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
+api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
-def get_api_key(
-    api_key_query: str = Security(api_key_query),
+def verify_api_key(
     api_key_header: str = Security(api_key_header),
 ) -> str:
     """Retrieve and validate an API key from the query parameters or HTTP header.
@@ -39,23 +37,21 @@ def get_api_key(
     Raises:
         HTTPException: If the API key is invalid or missing.
     """
+    if api_key_header:
+        if api_key_header.startswith("Basic "):
+            api_key_header = api_key_header.split("Basic ")[1]
+        data, count = (
+            supabase.table("api_keys")
+            .select("api_key")
+            .eq("api_key", api_key_header)
+            .eq("active", True)
+            .execute()
+        )
+        # Check if the API key exists and is active
+        if len(data) > 0:
+            logger.info("API key exists and is active.")
+            return True
 
-    if api_key_query:
-        data, count = (
-            supabase.table("api_keys")
-            .select("api_key")
-            .eq("active", api_key_query)
-            .execute()
-        )
-        return count
-    elif api_key_header:
-        data, count = (
-            supabase.table("api_keys")
-            .select("api_key")
-            .eq("active", api_key_header)
-            .execute()
-        )
-        return count
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or missing API Key",
@@ -96,12 +92,13 @@ async def log_requests(request: Request, call_next):
 
 @app.get("/checkdomain/{domain_name}")
 async def check_domain_availability(
-    domain_name: str, api_key: str = Security(get_api_key)
+    domain_name: str, api_key: str = Security(api_key_header)
 ):
-    if domain_name in cache:
-        return cache[domain_name]
+    if verify_api_key(api_key):
+        if domain_name in cache:
+            return cache[domain_name]
 
-    response = requests.get(f"{whoapi}/?apikey={api_key}&domain={domain_name}&r=taken")
-    data = response.json()
-    cache[domain_name] = data
-    return data
+        response = requests.get(f"{whoapi}/?apikey={who_api_key}&domain={domain_name}&r=taken")
+        data = response.json()
+        cache[domain_name] = data
+        return data
